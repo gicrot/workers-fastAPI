@@ -1,0 +1,52 @@
+#./workers-fastAPI/docker-compose.yml
+version: '3.7'
+
+services:
+  redis:
+    image: redis:7.0.0-alpine
+
+  web:
+    build:
+        context: .
+        dockerfile: Dockerfile
+    command: uvicorn main:app --reload --host 0.0.0.0
+    volumes:
+      - .:/opt/
+    expose:
+      - 8000
+    env_file:
+      - ./.env
+    depends_on:
+      - redis
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # concurrency specifies number of workers
+    # purge deletes the broker queue every time it starts up
+    command: celery -A main.celery_app worker -l INFO --concurrency=4 --purge
+    volumes:
+      - .:/code
+    depends_on:
+      - redis
+
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A main.celery_app beat -l INFO
+    volumes:
+      - .:/code
+    depends_on:
+      - redis
+
+  nginx:
+    build: ./nginx
+    ports: 
+      - 80:80
+    depends_on:
+      - web
+
+volumes:
+  postgres_data:
